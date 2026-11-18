@@ -1,27 +1,99 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import aiComputingImg from "../../../assets/images/editorial_ai_computing_1794955233988.jpg";
+import globalMarketsImg from "../../../assets/images/editorial_global_markets_1794955236718.jpg";
+import cultureCinemaImg from "../../../assets/images/editorial_culture_cinema_1794955237737.jpg";
+import scienceHorizonImg from "../../../assets/images/editorial_science_horizon_1794955238428.jpg";
 
-const ERROR_IMG_SRC =
-  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODgiIGhlaWdodD0iODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIuMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIzLjciPjxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjU2IiByeD0iNiIvPjxwYXRoIGQ9Im0xNiA1OCAxNi0xOCAzMiAzMiIvPjxjaXJjbGUgY3g9IjUzIiBjeT0iMzUiIHI9IjciLz48L3N2Zz4KCg=='
+const EDITORIAL_PLATES = [
+  aiComputingImg,
+  globalMarketsImg,
+  cultureCinemaImg,
+  scienceHorizonImg,
+];
+
+function pickEditorialPlate(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return EDITORIAL_PLATES[Math.abs(hash) % EDITORIAL_PLATES.length];
+}
 
 export function ImageWithFallback(props: React.ImgHTMLAttributes<HTMLImageElement>) {
-  const [didError, setDidError] = useState(false)
+  const { src, alt, style, className, onLoad, onError, ...rest } = props;
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [didError, setDidError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  const handleError = () => {
-    setDidError(true)
+  const fallbackPlate = useMemo(
+    () => pickEditorialPlate(String(alt || src || "kian-editorial")),
+    [alt, src],
+  );
+
+  useEffect(() => {
+    setDidError(false);
+    setLoaded(false);
+    const el = imgRef.current;
+    if (el && el.complete) {
+      if (el.naturalWidth > 4) {
+        setLoaded(true);
+      } else if (src) {
+        setDidError(true);
+      }
+    }
+    if (!src) return;
+    const timeout = window.setTimeout(() => {
+      setLoaded((alreadyLoaded) => {
+        if (!alreadyLoaded) setDidError(true);
+        return alreadyLoaded;
+      });
+    }, 2800);
+    return () => window.clearTimeout(timeout);
+  }, [src]);
+
+  if (!src || didError) {
+    return (
+      <img
+        src={fallbackPlate}
+        alt={alt || "تصویر تحریریه"}
+        className={className}
+        style={style}
+        loading="lazy"
+      />
+    );
   }
 
-  const { src, alt, style, className, ...rest } = props
-
-  return didError ? (
-    <div
-      className={`inline-block bg-gray-100 text-center align-middle ${className ?? ''}`}
-      style={style}
-    >
-      <div className="flex items-center justify-center w-full h-full">
-        <img src={ERROR_IMG_SRC} alt="Error loading image" {...rest} data-original-url={src} />
-      </div>
-    </div>
-  ) : (
-    <img src={src} alt={alt} className={className} style={style} {...rest} onError={handleError} />
-  )
+  return (
+    <img
+      ref={imgRef}
+      src={src}
+      alt={alt || ""}
+      referrerPolicy="no-referrer"
+      className={`transition-opacity duration-300 ease-out ${className ?? ""}`}
+      style={{
+        ...(loaded
+          ? undefined
+          : {
+              backgroundImage: `url("${fallbackPlate}")`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }),
+        ...style,
+      }}
+      {...rest}
+      onLoad={(e) => {
+        const target = e.currentTarget;
+        if (target.naturalWidth <= 4) {
+          setDidError(true);
+          return;
+        }
+        setLoaded(true);
+        onLoad?.(e);
+      }}
+      onError={(e) => {
+        setDidError(true);
+        onError?.(e);
+      }}
+    />
+  );
 }

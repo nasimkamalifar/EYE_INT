@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
+import { motion, useIsPresent } from "motion/react";
 import type { Article } from "../../../data";
-import { BUILT_IN_TOPICS, scoreArticleForTopic, type Topic } from "../../../topics";
+import { BUILT_IN_TOPICS, scoreArticleForTopic } from "../../../topics";
 import { faNum } from "../utils/fa";
+import { SPRING_SNAPPY } from "../../../motionChoreography";
 
 type Props = {
   articles: Article[];
@@ -9,12 +11,8 @@ type Props = {
   onPick: (topicId: string | null) => void;
 };
 
-/**
- * Minimal horizontal chip rail — matches the SegmentedControl/ChipScroller
- * aesthetic. Uses only the blue/white palette: neutral muted background for
- * inactive chips, --brand-500 for the active chip.
- */
 export function StoryRail({ articles, activeTopicId, onPick }: Props) {
+  const pillId = useId();
   const items = useMemo(() => {
     return BUILT_IN_TOPICS.map((t) => {
       const matches = articles.filter((a) => scoreArticleForTopic(a, t).score > 0);
@@ -26,9 +24,10 @@ export function StoryRail({ articles, activeTopicId, onPick }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <div className="px-2 pt-1 pb-2">
-      <div className="flex gap-2 overflow-x-auto scrollbar-none snap-x px-2">
+    <div className="px-2 pt-1.5 pb-2">
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-none snap-x px-2">
         <Chip
+          pillId={pillId}
           active={activeTopicId === null}
           onClick={() => onPick(null)}
           label="همه"
@@ -37,6 +36,7 @@ export function StoryRail({ articles, activeTopicId, onPick }: Props) {
         {items.map(({ topic, unread }) => (
           <Chip
             key={topic.id}
+            pillId={pillId}
             active={activeTopicId === topic.id}
             onClick={() => onPick(activeTopicId === topic.id ? null : topic.id)}
             label={topic.name}
@@ -49,27 +49,44 @@ export function StoryRail({ articles, activeTopicId, onPick }: Props) {
 }
 
 function Chip({
-  active, onClick, label, count,
+  pillId,
+  active,
+  onClick,
+  label,
+  count,
 }: {
-  active: boolean; onClick: () => void; label: string; count: number;
+  pillId: string;
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
 }) {
+  const isPresent = useIsPresent();
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`shrink-0 snap-start h-8 inline-flex items-center gap-1.5 px-3 rounded-full text-[12.5px] tap press transition-colors ${
+      className={`relative shrink-0 snap-start h-9 inline-flex items-center gap-1.5 px-3.5 rounded-full text-[12.5px] tap transition-colors whitespace-nowrap ${
         active
-          ? "bg-[var(--brand-500)] text-white font-semibold"
+          ? "text-[var(--primary-foreground)] font-semibold"
           : "bg-[var(--background-muted)] text-[var(--foreground-muted)] font-medium"
       }`}
     >
-      <span className="leading-none">{label}</span>
+      {active && isPresent && (
+        <motion.span
+          layoutId={pillId}
+          transition={SPRING_SNAPPY}
+          className="absolute inset-0 rounded-full bg-[var(--primary)]"
+        />
+      )}
+      <span className="relative z-10 leading-none">{label}</span>
       {count > 0 && (
         <span
-          className={`text-[10.5px] tabular-nums leading-none px-1.5 py-0.5 rounded-full ${
-            active ? "bg-white/20 text-white" : "bg-[var(--background)] text-[var(--foreground-subtle)]"
+          className={`relative z-10 text-[10.5px] tabular-nums leading-none ${
+            active ? "opacity-85" : "text-[var(--foreground-subtle)]"
           }`}
         >
-          {faNum(count > 99 ? 99 : count)}
+          · {faNum(count > 99 ? 99 : count)}
         </span>
       )}
     </button>

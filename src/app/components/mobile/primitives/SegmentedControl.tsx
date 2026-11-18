@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { motion } from "motion/react";
+import { motion, useIsPresent } from "motion/react";
 import { useHaptics } from "../hooks";
 
 export type Segment<T extends string> = { id: T; label: string; badge?: number };
@@ -18,6 +18,7 @@ type Props<T extends string> = {
  */
 export function SegmentedControl<T extends string>({ value, onChange, segments, full = true }: Props<T>) {
   const layoutId = useId();
+  const isPresent = useIsPresent();
   const haptic = useHaptics();
   return (
     <div
@@ -36,7 +37,7 @@ export function SegmentedControl<T extends string>({ value, onChange, segments, 
               on ? "text-[var(--foreground)]" : "text-[var(--foreground-subtle)]"
             }`}
           >
-            {on && (
+            {on && isPresent && (
               <motion.span
                 layoutId={layoutId}
                 className="absolute inset-0 rounded-full bg-[var(--background)] shadow-[var(--shadow-sm)]"

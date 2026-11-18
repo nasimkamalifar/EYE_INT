@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Columns3, Network, Workflow } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { DensityProvider, SkeletonStyles } from "./components/kian";
+import {
+  DESKTOP_WORKSPACE_ORDER,
+  EASE_EDITORIAL,
+  SPRING_SNAPPY,
+  computeDirectionalSlide,
+} from "./motionChoreography";
 import {
   type MainWorkspaceTab,
   resolveWorkspaceTabForView,
@@ -235,8 +242,21 @@ export default function App() {
     }
   }, [sidebarCollapsed]);
 
+  const prefersReducedMotion = useReducedMotion();
+  const [workspaceSlide, setWorkspaceSlide] = useState<{ enterX: number; exitX: number }>({
+    enterX: 0,
+    exitX: 0,
+  });
+
   const selectWorkspaceTab = useCallback((tab: MainWorkspaceTab) => {
-    setWorkspaceTab(tab);
+    setWorkspaceTab((prev) => {
+      const slide = computeDirectionalSlide(prev, tab, DESKTOP_WORKSPACE_ORDER, {
+        isRtl: true,
+        distancePx: 22,
+      });
+      setWorkspaceSlide({ enterX: slide.enterX, exitX: slide.exitX });
+      return tab;
+    });
     setShowStats(false);
     setShowDigest(false);
     if (tab === "graph") {
@@ -723,8 +743,13 @@ export default function App() {
   };
 
   const removeFeed = async (id: string) => {
-    if (!confirm("حذف این خوراک؟")) return;
-    try { await api.removeFeed(id); await loadAll(); } catch (e) { console.log("remove feed error:", e); }
+    try {
+      await api.removeFeed(id);
+      toast.success("خوراک از فهرست حذف شد");
+      await loadAll();
+    } catch (e) {
+      console.log("remove feed error:", e);
+    }
   };
 
   const toggleSave = (id: string) => {
@@ -747,7 +772,26 @@ export default function App() {
     onSave: () => { if (selected) toggleSave(selected.id); },
     onOpenOriginal: () => { if (selected?.link) window.open(selected.link, '_blank', 'noopener'); },
     onRefresh: () => loadAll(selectedFeed ? { feedId: selectedFeed } : {}),
-    onClose: () => setSelectedId(null),
+    onClose: () => {
+      if (
+        paletteOpen ||
+        readingMode ||
+        notesOpen ||
+        hubOpen ||
+        addOpen ||
+        opmlOpen ||
+        helpOpen ||
+        rulesOpen ||
+        timelineOpen ||
+        knowledgeOpen ||
+        savedSearchesOpen ||
+        builderOpen ||
+        studioOpen
+      ) {
+        return;
+      }
+      setSelectedId(null);
+    },
     onFocusSearch: () => {
       const el = document.querySelector<HTMLInputElement>('input[data-search-input]');
       el?.focus();
@@ -897,21 +941,28 @@ export default function App() {
               case "home":
                 return (
                   <div className="flex flex-col h-full min-h-0">
-                    <div dir="rtl" className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-gradient-to-l from-indigo-950 via-slate-900 to-emerald-950 text-white border-b border-indigo-500/30 overflow-x-auto">
-                      <button
-                        onClick={() => { setStudioInitialView("visual_flow"); setMobileStudioOpen(true); }}
-                        data-testid="mobile-top-open-visual-flow"
-                        className="shrink-0 px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold inline-flex items-center gap-1 shadow-sm"
-                      >
-                        ⚡ بوم بصری اتوماسیون
-                      </button>
-                      <button
-                        onClick={() => { setStudioInitialView("workspace"); setMobileStudioOpen(true); }}
-                        data-testid="mobile-top-open-workspace"
-                        className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold inline-flex items-center gap-1 shadow-sm"
-                      >
-                        🎛️ میز کار تحریریه
-                      </button>
+                    <div dir="rtl" className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-[var(--background-subtle)] border-b border-[var(--border-subtle)] overflow-x-auto scrollbar-none">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => { setStudioInitialView("visual_flow"); setMobileStudioOpen(true); }}
+                          data-testid="mobile-top-open-visual-flow"
+                          className="tactile-btn shrink-0 h-7 px-2.5 rounded-[var(--radius-sm)] bg-[var(--foreground)] text-[var(--background)] text-[11px] font-semibold inline-flex items-center gap-1.5"
+                        >
+                          <Workflow className="size-3 text-[var(--brand-500)]" />
+                          <span>بوم بصری اتوماسیون</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setStudioInitialView("workspace"); setMobileStudioOpen(true); }}
+                          data-testid="mobile-top-open-workspace"
+                          className="tactile-btn shrink-0 h-7 px-2.5 rounded-[var(--radius-sm)] bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] text-[11px] font-medium inline-flex items-center gap-1.5"
+                        >
+                          <Columns3 className="size-3 text-[var(--brand-600)]" />
+                          <span>میز کار تحریریه</span>
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-[var(--foreground-subtle)] font-mono shrink-0">STUDIO</span>
                     </div>
                     <div className="flex-1 min-h-0">
                       <HomeScreen
@@ -1177,18 +1228,32 @@ export default function App() {
     );
   }
 
+  const stageKey = workspaceTab === "editorial"
+    ? "editorial"
+    : workspaceTab === "visual_flow"
+      ? "visual_flow"
+      : showStats
+        ? "stats"
+        : showDigest
+          ? "digest"
+          : workspaceTab === "graph" || activeView === "graph"
+            ? "graph"
+            : ["room", "social", "watch", "newspack", "international"].includes(activeView)
+              ? `view-${activeView}`
+              : "reader";
+
   return (
     <>
     <DensityProvider />
     <SkeletonStyles />
     <Toaster position="top-center" dir="rtl" theme={theme} richColors closeButton />
-    <div dir="rtl" lang="fa" className="size-full flex bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative">
-      <div className="md:hidden fixed top-0 right-0 left-0 z-30 flex items-center gap-2 px-3 h-12 bg-white/90 dark:bg-slate-950/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-        <button onClick={() => setMobileDrawer(true)} className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="منو">
+    <div dir="rtl" lang="fa" className="size-full flex bg-[var(--background)] text-[var(--foreground)] overflow-hidden relative">
+      <div className="md:hidden fixed top-0 right-0 left-0 z-30 flex items-center gap-2 px-3 h-12 glass border-b border-[var(--border-subtle)]">
+        <button onClick={() => setMobileDrawer(true)} className="p-2 -mr-2 rounded-lg hover:bg-[var(--background-muted)]" aria-label="منو">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <div className="text-sm truncate flex-1">{title || 'flow'}</div>
-        <button onClick={() => loadAll(selectedFeed ? { feedId: selectedFeed } : {})} disabled={loading} className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50" aria-label="بروزرسانی">
+        <div className="text-sm font-semibold truncate flex-1">{title || 'کیان'}</div>
+        <button onClick={() => loadAll(selectedFeed ? { feedId: selectedFeed } : {})} disabled={loading} className="p-2 -ml-2 rounded-lg hover:bg-[var(--background-muted)] disabled:opacity-50" aria-label="بروزرسانی">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={loading ? 'animate-spin' : ''}><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
       </div>
@@ -1199,8 +1264,14 @@ export default function App() {
       <Sidebar
         activeView={activeView}
         setActiveView={(v) => {
+          const nextTab = resolveWorkspaceTabForView(v);
+          const slide = computeDirectionalSlide(workspaceTab, nextTab, DESKTOP_WORKSPACE_ORDER, {
+            isRtl: true,
+            distancePx: 20,
+          });
+          setWorkspaceSlide({ enterX: slide.enterX, exitX: slide.exitX });
           setActiveView(v);
-          setWorkspaceTab(resolveWorkspaceTabForView(v));
+          setWorkspaceTab(nextTab);
         }}
         selectedFeed={selectedFeed}
         setSelectedFeed={setSelectedFeed}
@@ -1250,12 +1321,12 @@ export default function App() {
         </div>
       )}
       <div className="flex-1 flex flex-col min-w-0 pt-12 md:pt-0 pb-14 md:pb-0">
-        {/* Main Workspace Tab Switcher — switches cleanly between Reader, Editorial Desk, Visual Flow Studio, and GraphView */}
-        <div className="shrink-0 flex items-center justify-between gap-3 px-3 py-1.5 bg-[var(--background-subtle)] border-b border-[var(--border-subtle)]">
+        {/* Main Workspace Tab Switcher — shared-element layoutId capsule */}
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-1.5 bg-[var(--background-subtle)] border-b border-[var(--border-subtle)]">
           <div
             role="tablist"
             aria-label="تب‌های فضای کاری اصلی"
-            className="inline-flex items-center gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--background-muted)] overflow-x-auto scrollbar-none max-w-full"
+            className="inline-flex items-center gap-0.5 p-1 rounded-[var(--radius-md)] bg-[var(--background-muted)]/85 border border-[var(--border-subtle)] overflow-x-auto scrollbar-none max-w-full"
           >
             {[
               { id: "reader" as MainWorkspaceTab, label: "خواندن و رصد", icon: BookOpen, testId: "workspace-tab-reader" },
@@ -1273,26 +1344,42 @@ export default function App() {
                   aria-selected={isActive}
                   data-testid={tab.testId}
                   onClick={() => selectWorkspaceTab(tab.id)}
-                  className={`h-7 px-3 rounded-[var(--radius-sm)] text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  className={`relative h-7 px-3 rounded-[var(--radius-sm)] text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                     isActive
-                      ? "bg-[var(--card)] text-[var(--foreground)] font-semibold shadow-[var(--shadow-xs)] border border-[var(--border-subtle)]"
+                      ? "text-[var(--foreground)] font-semibold"
                       : "text-[var(--foreground-muted)] hover:text-[var(--foreground)] font-medium"
                   }`}
                 >
-                  <Icon className={`size-3.5 shrink-0 ${isActive ? "text-[var(--brand-600)]" : ""}`} />
-                  <span>{tab.label}</span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="desktop-workspace-active-pill"
+                      transition={SPRING_SNAPPY}
+                      className="absolute inset-0 rounded-[var(--radius-sm)] bg-[var(--card)] shadow-[var(--shadow-xs)] border border-[var(--border-subtle)]"
+                    />
+                  )}
+                  <Icon className={`relative z-10 size-3.5 shrink-0 transition-colors ${isActive ? "text-[var(--brand-600)]" : ""}`} />
+                  <span className="relative z-10">{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
           <div className="hidden lg:flex items-center gap-2 text-[11px] text-[var(--foreground-subtle)] shrink-0">
-            <span>۴۷+ منبع RSS فعال</span>
-            <span>·</span>
+            <span className="tabular-nums">۴۷+ منبع RSS فعال</span>
+            <span aria-hidden="true">·</span>
             <span data-testid="ai-model-status" className="text-[var(--brand-600)] font-medium">هوش مصنوعی متصل ({activeAiModel})</span>
           </div>
         </div>
-      <div className="flex-1 flex min-w-0 min-h-0">
+      <div className="flex-1 flex min-w-0 min-h-0 overflow-hidden relative">
+      <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={stageKey}
+        initial={prefersReducedMotion ? false : { opacity: 0, x: workspaceSlide.enterX }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: workspaceSlide.exitX }}
+        transition={{ duration: 0.18, ease: EASE_EDITORIAL }}
+        className="flex-1 flex min-w-0 min-h-0"
+      >
       {workspaceTab === "editorial" ? (
         <DesktopStudio
           key="embedded-editorial"
@@ -1343,8 +1430,21 @@ export default function App() {
               onMarkAllRead={markAllRead}
             />
           </div>
-          <div className={`${showArticleView ? 'flex fixed md:relative inset-0 md:inset-auto z-20 md:z-auto bg-white dark:bg-slate-950' : 'hidden md:flex'} flex-1 min-w-0`}>
-            <ArticleView article={selected} onClose={() => setSelectedId(null)} toggleStar={toggleStar} toggleSave={toggleSave} isSaved={selected ? savedIds.has(selected.id) : false} onTagsChange={setArticleTags} related={related} duplicates={duplicates} onSelectRelated={handleSelect} onOpenTimeline={(topic) => { setTimelineTopic(topic); setTimelineOpen(true); }} />
+          <div className={`${showArticleView ? 'flex fixed md:relative inset-0 md:inset-auto z-20 md:z-auto bg-[var(--background)]' : 'hidden md:flex'} flex-1 min-w-0`}>
+            <ArticleView
+              article={selected}
+              onClose={() => setSelectedId(null)}
+              toggleStar={toggleStar}
+              toggleSave={toggleSave}
+              isSaved={selected ? savedIds.has(selected.id) : false}
+              onTagsChange={setArticleTags}
+              related={related}
+              duplicates={duplicates}
+              onSelectRelated={handleSelect}
+              onOpenTimeline={(topic) => { setTimelineTopic(topic); setTimelineOpen(true); }}
+              onOpenReadingMode={() => setReadingMode(true)}
+              onOpenNotes={() => setNotesOpen(true)}
+            />
           </div>
         </>
       ) : (
@@ -1393,11 +1493,26 @@ export default function App() {
           translatingIds={translatingIds}
         />
       </div>
-      <div className={`${showArticleView ? 'flex fixed md:relative inset-0 md:inset-auto z-20 md:z-auto bg-white dark:bg-slate-950' : 'hidden md:flex'} flex-1 min-w-0 p-[0px] m-[0px]`}>
-        <ArticleView article={selected} onClose={() => setSelectedId(null)} toggleStar={toggleStar} toggleSave={toggleSave} isSaved={selected ? savedIds.has(selected.id) : false} onTagsChange={setArticleTags} related={related} duplicates={duplicates} onSelectRelated={handleSelect} onOpenTimeline={(topic) => { setTimelineTopic(topic); setTimelineOpen(true); }} />
+      <div className={`${showArticleView ? 'flex fixed md:relative inset-0 md:inset-auto z-20 md:z-auto bg-[var(--background)]' : 'hidden md:flex'} flex-1 min-w-0 p-0 m-0`}>
+        <ArticleView
+          article={selected}
+          onClose={() => setSelectedId(null)}
+          toggleStar={toggleStar}
+          toggleSave={toggleSave}
+          isSaved={selected ? savedIds.has(selected.id) : false}
+          onTagsChange={setArticleTags}
+          related={related}
+          duplicates={duplicates}
+          onSelectRelated={handleSelect}
+          onOpenTimeline={(topic) => { setTimelineTopic(topic); setTimelineOpen(true); }}
+          onOpenReadingMode={() => setReadingMode(true)}
+          onOpenNotes={() => setNotesOpen(true)}
+        />
       </div>
       </>
       )}
+      </motion.div>
+      </AnimatePresence>
       </div>
       </div>
 
@@ -1443,17 +1558,20 @@ export default function App() {
           toggleFocus: () => { if (selected) setReadingMode(true); },
         }}
       />
-      {readingMode && selected && (
-        <ReadingMode
-          article={selected}
-          onClose={() => setReadingMode(false)}
-          onToggleStar={toggleStar}
-          onToggleSave={toggleSave}
-          isSaved={savedIds.has(selected.id)}
-          onPrev={() => navigate(-1)}
-          onNext={() => navigate(1)}
-        />
-      )}
+      <AnimatePresence>
+        {readingMode && selected && (
+          <ReadingMode
+            key={`rm-${selected.id}`}
+            article={selected}
+            onClose={() => setReadingMode(false)}
+            onToggleStar={toggleStar}
+            onToggleSave={toggleSave}
+            isSaved={savedIds.has(selected.id)}
+            onPrev={() => navigate(-1)}
+            onNext={() => navigate(1)}
+          />
+        )}
+      </AnimatePresence>
       <AddFeedDialog open={addOpen} onClose={() => setAddOpen(false)} onDone={() => loadAll()} />
       <SourceHub open={hubOpen} onClose={() => setHubOpen(false)} feeds={feeds} onChanged={() => loadAll()} />
       <SavedSearches open={savedSearchesOpen} onClose={() => setSavedSearchesOpen(false)} articles={items} feeds={feeds}
@@ -1473,11 +1591,19 @@ export default function App() {
         onDelete={deleteCustomTopic}
         initial={builderInitial}
       />
-      {searching && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/80 text-white text-xs px-3 py-1.5 rounded-full z-20">
-          در حال جستجو در متن مقالات...
-        </div>
-      )}
+      <AnimatePresence>
+        {searching && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.16, ease: EASE_EDITORIAL }}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 glass bg-[var(--foreground)]/90 text-[var(--background)] text-xs px-3.5 py-1.5 rounded-full shadow-lg z-20"
+          >
+            در حال جستجو در متن مقالات...
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
     </>
   );

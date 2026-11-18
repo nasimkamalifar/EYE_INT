@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Type, Minus, Plus, Sun, Moon, Coffee, AlignLeft, AlignJustify, Volume2, VolumeX, Star, Bookmark, ExternalLink, Sparkles, Highlighter, FileText, Quote as QuoteIcon, Trash2, Map as MapIcon, Target } from "lucide-react";
+import { X, Type, Minus, Plus, Sun, Moon, Coffee, AlignLeft, AlignJustify, Volume2, VolumeX, Star, Bookmark, ExternalLink, Sparkles, Highlighter, Quote as QuoteIcon, Trash2, Map as MapIcon, Target } from "lucide-react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import type { Article } from "../data";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { EASE_EDITORIAL, SPRING_SNAPPY, computeReadingScale } from "../motionChoreography";
 import {
   summarize, extractQuotes, readability, personalReadTime, recordReadSpeed,
   getHighlights, addHighlight, removeHighlight, updateHighlight,
@@ -32,6 +35,7 @@ const FONTS = [
 const WIDTH_PX: Record<Width, string> = { narrow: "560px", medium: "720px", wide: "880px" };
 
 export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSaved, onPrev, onNext }: Props) {
+  const isPresent = useIsPresent();
   const stored = (k: string, fb: string) => { try { return localStorage.getItem(k) || fb; } catch { return fb; } };
   const storedNum = (k: string, fb: number) => { try { return Number(localStorage.getItem(k)) || fb; } catch { return fb; } };
 
@@ -68,8 +72,7 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
     const el = containerRef.current;
     if (!el) return;
     const onScroll = () => {
-      const max = el.scrollHeight - el.clientHeight;
-      const pct = max > 0 ? Math.min(1, el.scrollTop / max) : 0;
+      const pct = computeReadingScale(el.scrollTop, el.scrollHeight, el.clientHeight);
       setProgress(pct);
       savePosition(article.id, pct);
     };
@@ -103,7 +106,7 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
       else if (e.key === "j" || e.key === "ArrowDown") containerRef.current?.scrollBy({ top: 300, behavior: "smooth" });
       else if (e.key === "k" || e.key === "ArrowUp") containerRef.current?.scrollBy({ top: -300, behavior: "smooth" });
       else if (e.key === "ArrowLeft") onNext?.();
@@ -113,8 +116,8 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
       else if (e.key.toLowerCase() === "q") setPanel(p => p === "quotes" ? null : "quotes");
       else if (e.key.toLowerCase() === "m") setPanel(p => p === "minimap" ? null : "minimap");
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose, onNext, onPrev]);
 
   useEffect(() => () => { try { window.speechSynthesis?.cancel(); } catch {} }, []);
@@ -201,30 +204,45 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
   };
 
   return (
-    <div className={`fixed inset-0 z-50 ${themeClasses}`} dir="rtl">
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-black/10 dark:bg-white/10 z-10">
-        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress * 100}%` }} />
+    <motion.div
+      role="dialog"
+      aria-modal="true"
+      aria-label="حالت مطالعه متمرکز"
+      initial={{ opacity: 0, scale: 0.985 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.985 }}
+      transition={{ duration: 0.18, ease: EASE_EDITORIAL }}
+      className={`fixed inset-0 z-50 ${themeClasses} transition-colors duration-200 ${isPresent ? "" : "pointer-events-none"}`}
+      dir="rtl"
+    >
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-black/10 dark:bg-white/10 z-10 overflow-hidden">
+        <div
+          className="h-full w-full bg-[var(--brand-600)] origin-right transition-transform duration-150 ease-out will-change-transform"
+          style={{ transform: `scaleX(${progress})` }}
+        />
       </div>
 
       <div ref={containerRef} className="h-full overflow-y-auto">
         <div
-          className="mx-auto px-6 pt-20 pb-32"
+          className="mx-auto px-6 pt-20 pb-36"
           style={{ maxWidth: WIDTH_PX[width], fontFamily, fontSize: `${fontSize}px`, lineHeight }}
         >
           {article.image && (
-            <img src={article.image} alt="" className="w-full rounded-xl mb-8 max-h-96 object-cover" loading="lazy" />
+            <div className="mb-8 overflow-hidden rounded-xl border border-current/10">
+              <ImageWithFallback src={article.image} alt={article.title} className="w-full max-h-96 object-cover" />
+            </div>
           )}
           <div className="text-xs opacity-60 mb-3 flex items-center gap-2 flex-wrap">
-            <span>{article.source}</span>
+            <span className="font-semibold text-[var(--brand-600)] opacity-100">{article.source}</span>
             {article.author && <><span>·</span><span>{article.author}</span></>}
             {article.date && <><span>·</span><span>{article.date}</span></>}
             <span>·</span><span>{article.readTime || `${Math.ceil(wordCount / 200)} دقیقه`}</span>
           </div>
-          <h1 style={{ fontSize: `${Math.round(fontSize * 1.9)}px`, lineHeight: 1.4 }} className="mb-6 font-bold">
+          <h1 style={{ fontSize: `${Math.round(fontSize * 1.85)}px`, lineHeight: 1.38 }} className="mb-6 font-bold font-display headline-balance">
             {article.title}
           </h1>
           {article.preview && (
-            <p className="opacity-80 mb-8 italic" style={{ fontSize: `${Math.round(fontSize * 1.05)}px` }}>
+            <p className="opacity-80 mb-8 leading-relaxed border-b border-current/10 pb-6" style={{ fontSize: `${Math.round(fontSize * 1.05)}px` }}>
               {article.preview}
             </p>
           )}
@@ -232,9 +250,9 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
             {paragraphs.map((p, i) => renderHighlightedParagraph(p, i))}
           </div>
           <div className="mt-12 pt-6 border-t border-current/10 flex items-center justify-between text-xs opacity-60">
-            <span>{remainingMin.toLocaleString("fa-IR")} دقیقه باقی‌مانده</span>
+            <span className="tabular-nums">{remainingMin.toLocaleString("fa-IR")} دقیقه باقی‌مانده</span>
             {article.link && (
-              <a href={article.link} target="_blank" rel="noopener" className="flex items-center gap-1 hover:opacity-100">
+              <a href={article.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:opacity-100 transition-opacity">
                 مشاهدهٔ منبع <ExternalLink className="w-3 h-3" />
               </a>
             )}
@@ -242,27 +260,51 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
         </div>
       </div>
 
-      <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/5 dark:bg-white/5 backdrop-blur rounded-full p-1">
-        <button onClick={() => setTheme("light")} className={`p-2 rounded-full ${theme === "light" ? "bg-white shadow text-slate-900" : "opacity-60"}`} title="روشن"><Sun className="w-3.5 h-3.5" /></button>
-        <button onClick={() => setTheme("sepia")} className={`p-2 rounded-full ${theme === "sepia" ? "bg-[#e8d9b4] text-[#3b2f17] shadow" : "opacity-60"}`} title="سپیا"><Coffee className="w-3.5 h-3.5" /></button>
-        <button onClick={() => setTheme("dark")} className={`p-2 rounded-full ${theme === "dark" ? "bg-slate-800 text-white shadow" : "opacity-60"}`} title="تاریک"><Moon className="w-3.5 h-3.5" /></button>
+      <div className="absolute top-3 right-3 flex items-center gap-0.5 bg-black/5 dark:bg-white/10 backdrop-blur-md rounded-full p-1 border border-current/10">
+        {([
+          { id: "light" as Theme, title: "روشن", icon: Sun, activeText: "text-slate-900", pillBg: "bg-white shadow-sm" },
+          { id: "sepia" as Theme, title: "سپیا", icon: Coffee, activeText: "text-[#3b2f17]", pillBg: "bg-[#e8d9b4] shadow-sm" },
+          { id: "dark" as Theme, title: "تاریک", icon: Moon, activeText: "text-white", pillBg: "bg-slate-800 shadow-sm" },
+        ]).map((opt) => {
+          const Icon = opt.icon;
+          const active = theme === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setTheme(opt.id)}
+              aria-label={opt.title}
+              title={opt.title}
+              className={`relative p-2 rounded-full transition-opacity cursor-pointer ${active ? opt.activeText : "opacity-60 hover:opacity-95"}`}
+            >
+              {active && isPresent && (
+                <motion.span
+                  layoutId="rm-theme-pill"
+                  transition={SPRING_SNAPPY}
+                  className={`absolute inset-0 rounded-full ${opt.pillBg}`}
+                />
+              )}
+              <Icon className="relative z-10 w-3.5 h-3.5" />
+            </button>
+          );
+        })}
       </div>
 
-      <div className="absolute top-3 left-3 flex items-center gap-1">
-        <button onClick={onClose} className="p-2 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10" title="بستن (Esc)">
+      <div className="absolute top-3 left-3 flex items-center gap-1.5">
+        <button type="button" onClick={onClose} aria-label="بستن مطالعه متمرکز" className="tactile-btn p-2 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 border border-current/10 cursor-pointer" title="بستن (Esc)">
           <X className="w-4 h-4" />
         </button>
-        <button onClick={() => setPanel(panel === "summary" ? null : "summary")} className={`p-2 rounded-full ${panel === "summary" ? "bg-emerald-500 text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="خلاصه (s)">
+        <button type="button" onClick={() => setPanel(panel === "summary" ? null : "summary")} aria-label="خلاصه مقاله" className={`tactile-btn p-2 rounded-full cursor-pointer ${panel === "summary" ? "bg-[var(--brand-600)] text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="خلاصه (s)">
           <Sparkles className="w-4 h-4" />
         </button>
-        <button onClick={() => setPanel(panel === "highlights" ? null : "highlights")} className={`p-2 rounded-full ${panel === "highlights" ? "bg-amber-500 text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="هایلایت‌ها (h)">
+        <button type="button" onClick={() => setPanel(panel === "highlights" ? null : "highlights")} aria-label="هایلایت‌ها" className={`relative tactile-btn p-2 rounded-full cursor-pointer ${panel === "highlights" ? "bg-amber-500 text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="هایلایت‌ها (h)">
           <Highlighter className="w-4 h-4" />
-          {highlights.length > 0 && <span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[9px] rounded-full px-1">{highlights.length}</span>}
+          {highlights.length > 0 && <span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[9px] rounded-full px-1 tabular-nums">{highlights.length}</span>}
         </button>
-        <button onClick={() => setPanel(panel === "quotes" ? null : "quotes")} className={`p-2 rounded-full ${panel === "quotes" ? "bg-violet-500 text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="نقل‌قول‌ها (q)">
+        <button type="button" onClick={() => setPanel(panel === "quotes" ? null : "quotes")} aria-label="نقل‌قول‌ها" className={`tactile-btn p-2 rounded-full cursor-pointer ${panel === "quotes" ? "bg-[var(--foreground)] text-[var(--background)]" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="نقل‌قول‌ها (q)">
           <QuoteIcon className="w-4 h-4" />
         </button>
-        <button onClick={() => setPanel(panel === "minimap" ? null : "minimap")} className={`p-2 rounded-full ${panel === "minimap" ? "bg-emerald-500 text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="نقشهٔ کوچک (m)">
+        <button type="button" onClick={() => setPanel(panel === "minimap" ? null : "minimap")} aria-label="نقشه مقاله" className={`tactile-btn p-2 rounded-full cursor-pointer ${panel === "minimap" ? "bg-[var(--brand-600)] text-white" : "bg-black/5 dark:bg-white/10 hover:bg-black/10"}`} title="نقشهٔ کوچک (m)">
           <MapIcon className="w-4 h-4" />
         </button>
       </div>
@@ -280,9 +322,18 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
         </div>
       )}
 
+      <AnimatePresence>
       {panel && (
-        <div className="absolute top-16 right-3 bottom-20 w-80 max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-30 flex flex-col text-slate-900 dark:text-slate-100" dir="rtl">
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-200 dark:border-slate-800">
+        <motion.aside
+          key={panel}
+          initial={{ opacity: 0, x: 18, scale: 0.98 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 14, scale: 0.98 }}
+          transition={{ duration: 0.18, ease: EASE_EDITORIAL }}
+          className="absolute top-16 right-3 bottom-20 w-80 max-w-[90vw] bg-[var(--card)] rounded-2xl shadow-2xl border border-[var(--border)] z-30 flex flex-col text-[var(--foreground)]"
+          dir="rtl"
+        >
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)]">
             <div className="text-sm flex-1">
               {panel === "summary" && "خلاصه AI"}
               {panel === "highlights" && `هایلایت‌ها (${highlights.length})`}
@@ -334,24 +385,29 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
                 </div>
               )}
               {highlights.map(h => (
-                <div key={h.id} className={`rounded-lg p-2 border-r-4 bg-slate-50 dark:bg-slate-800/50`}
-                  style={{ borderColor: h.color === "yellow" ? "#facc15" : h.color === "green" ? "#10b981" : h.color === "blue" ? "#3b82f6" : "#f43f5e" }}>
-                  <div className="text-xs leading-relaxed">{h.text}</div>
+                <div key={h.id} className="rounded-xl p-2.5 border border-[var(--border-subtle)] bg-[var(--background-subtle)]">
+                  <div className="flex items-start gap-2">
+                    <span
+                      className="mt-1.5 size-2 rounded-full shrink-0"
+                      style={{ backgroundColor: h.color === "yellow" ? "#facc15" : h.color === "green" ? "#10b981" : h.color === "blue" ? "#3b82f6" : "#f43f5e" }}
+                    />
+                    <div className="text-xs leading-relaxed flex-1">{h.text}</div>
+                  </div>
                   {editingNote === h.id ? (
                     <div className="mt-2">
                       <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
-                        rows={2} className="w-full text-[11px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-1.5" />
+                        rows={2} className="w-full text-[11px] bg-[var(--card)] border border-[var(--border)] rounded p-1.5" />
                       <div className="flex gap-1 mt-1">
                         <button onClick={() => { updateHighlight(h.id, { note: noteDraft }); setHighlights(getHighlights(article.id)); setEditingNote(null); }}
-                          className="text-[10px] px-2 py-0.5 bg-emerald-500 text-white rounded">ذخیره</button>
-                        <button onClick={() => setEditingNote(null)} className="text-[10px] px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">انصراف</button>
+                          className="text-[10px] px-2 py-0.5 bg-[var(--brand-600)] text-white rounded">ذخیره</button>
+                        <button onClick={() => setEditingNote(null)} className="text-[10px] px-2 py-0.5 bg-[var(--background-muted)] rounded">انصراف</button>
                       </div>
                     </div>
                   ) : h.note ? (
                     <div className="mt-1 text-[11px] italic opacity-75 cursor-pointer" onClick={() => { setEditingNote(h.id); setNoteDraft(h.note || ""); }}>{h.note}</div>
                   ) : null}
-                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-500">
-                    <button onClick={() => { setEditingNote(h.id); setNoteDraft(h.note || ""); }} className="hover:text-emerald-500">{h.note ? "ویرایش یادداشت" : "افزودن یادداشت"}</button>
+                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--foreground-muted)]">
+                    <button onClick={() => { setEditingNote(h.id); setNoteDraft(h.note || ""); }} className="hover:text-[var(--brand-600)]">{h.note ? "ویرایش یادداشت" : "افزودن یادداشت"}</button>
                     <button onClick={() => { removeHighlight(h.id); setHighlights(getHighlights(article.id)); }} className="hover:text-rose-500 flex items-center gap-1">
                       <Trash2 className="w-3 h-3" /> حذف
                     </button>
@@ -363,11 +419,11 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
 
           {panel === "quotes" && (
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {quotes.length === 0 && <div className="text-xs text-slate-500 text-center py-8">نقل‌قولی شناسایی نشد.</div>}
+              {quotes.length === 0 && <div className="text-xs text-[var(--foreground-muted)] text-center py-8">نقل‌قولی شناسایی نشد.</div>}
               {quotes.map((q, i) => (
-                <div key={i} className="rounded-lg p-2 bg-violet-50 dark:bg-violet-950/30 border-r-4 border-violet-400">
-                  <div className="text-xs leading-relaxed">«{q.text}»</div>
-                  {q.speaker && <div className="text-[10px] text-violet-600 dark:text-violet-300 mt-1">— {q.speaker}</div>}
+                <div key={i} className="rounded-xl p-3 bg-[var(--background-subtle)] border border-[var(--border-subtle)]">
+                  <div className="text-xs leading-relaxed font-display">«{q.text}»</div>
+                  {q.speaker && <div className="text-[10px] text-[var(--brand-600)] mt-1.5">— {q.speaker}</div>}
                 </div>
               ))}
             </div>
@@ -375,7 +431,7 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
 
           {panel === "minimap" && (
             <div className="flex-1 overflow-y-auto p-3">
-              <div className="text-[10px] text-slate-500 mb-2">روی هر بخش کلیک کنید برای پرش.</div>
+              <div className="text-[10px] text-[var(--foreground-muted)] mb-2">روی هر بخش کلیک کنید برای پرش.</div>
               <div className="space-y-1">
                 {paragraphs.map((p, i) => {
                   const target = (i / Math.max(1, paragraphs.length - 1));
@@ -386,7 +442,7 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
                         const el = containerRef.current; if (!el) return;
                         el.scrollTo({ top: target * (el.scrollHeight - el.clientHeight), behavior: "smooth" });
                       }}
-                      className={`w-full text-right text-[11px] line-clamp-2 px-2 py-1.5 rounded ${active ? "bg-emerald-500 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
+                      className={`w-full text-right text-[11px] line-clamp-2 px-2 py-1.5 rounded ${active ? "bg-[var(--brand-600)] text-white" : "hover:bg-[var(--background-muted)]"}`}>
                       <span className="opacity-50 ml-1">{(i + 1).toLocaleString("fa-IR")}.</span>
                       {p.slice(0, 80)}
                     </button>
@@ -395,56 +451,60 @@ export function ReadingMode({ article, onClose, onToggleStar, onToggleSave, isSa
               </div>
             </div>
           )}
-        </div>
+        </motion.aside>
       )}
+      </AnimatePresence>
 
-      <div className="absolute bottom-20 right-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100" dir="rtl">
+      <div className="absolute bottom-20 right-3 bg-[var(--card)]/90 backdrop-blur-md rounded-2xl shadow-lg border border-[var(--border-subtle)] px-3 py-2 text-[var(--foreground)]" dir="rtl">
         <div className="flex items-center gap-2 text-[11px]">
-          <Target className="w-3.5 h-3.5 text-emerald-500" />
+          <Target className="w-3.5 h-3.5 text-[var(--brand-600)]" />
           <span>هدف امروز</span>
           <span className="tabular-nums opacity-70">{goal.read.toLocaleString("fa-IR")}/{goal.total.toLocaleString("fa-IR")}</span>
         </div>
-        <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1 w-32">
-          <div className="h-full bg-emerald-500" style={{ width: `${goal.pct * 100}%` }} />
+        <div className="h-1 bg-[var(--background-muted)] rounded-full overflow-hidden mt-1 w-32">
+          <div
+            className="h-full w-full bg-[var(--brand-600)] origin-right transition-transform duration-200"
+            style={{ transform: `scaleX(${Math.max(0, Math.min(1, goal.pct))})` }}
+          />
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/80 dark:bg-white/10 text-white backdrop-blur rounded-full px-2 py-1.5 shadow-2xl">
-        <button onClick={() => setFontSize(s => Math.max(13, s - 1))} className="p-1.5 rounded-full hover:bg-white/10" title="کوچکتر"><Minus className="w-3.5 h-3.5" /></button>
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900/88 dark:bg-slate-900/92 text-white backdrop-blur-md rounded-full px-2.5 py-1.5 shadow-2xl border border-white/10">
+        <button onClick={() => setFontSize(s => Math.max(13, s - 1))} aria-label="اندازه قلم کوچکتر" className="p-1.5 rounded-full hover:bg-white/10 cursor-pointer" title="کوچکتر"><Minus className="w-3.5 h-3.5" /></button>
         <Type className="w-3.5 h-3.5 opacity-60" />
         <span className="text-[10px] tabular-nums w-6 text-center">{fontSize}</span>
-        <button onClick={() => setFontSize(s => Math.min(30, s + 1))} className="p-1.5 rounded-full hover:bg-white/10" title="بزرگتر"><Plus className="w-3.5 h-3.5" /></button>
+        <button onClick={() => setFontSize(s => Math.min(30, s + 1))} aria-label="اندازه قلم بزرگتر" className="p-1.5 rounded-full hover:bg-white/10 cursor-pointer" title="بزرگتر"><Plus className="w-3.5 h-3.5" /></button>
         <span className="w-px h-4 bg-white/20 mx-1" />
-        <select value={font} onChange={e => setFont(e.target.value)}
+        <select value={font} onChange={e => setFont(e.target.value)} aria-label="انتخاب فونت"
           className="bg-transparent text-[11px] outline-none cursor-pointer">
           {FONTS.map(f => <option key={f.id} value={f.id} className="text-slate-900">{f.label}</option>)}
         </select>
         <span className="w-px h-4 bg-white/20 mx-1" />
-        <button onClick={() => setLineHeight(h => Math.max(1.4, +(h - 0.1).toFixed(2)))} className="p-1.5 rounded-full hover:bg-white/10 text-[10px]" title="فاصله سطر کمتر">−ل</button>
-        <button onClick={() => setLineHeight(h => Math.min(2.4, +(h + 0.1).toFixed(2)))} className="p-1.5 rounded-full hover:bg-white/10 text-[10px]" title="فاصله سطر بیشتر">+ل</button>
+        <button onClick={() => setLineHeight(h => Math.max(1.4, +(h - 0.1).toFixed(2)))} className="p-1.5 rounded-full hover:bg-white/10 text-[10px] cursor-pointer" title="فاصله سطر کمتر">−ل</button>
+        <button onClick={() => setLineHeight(h => Math.min(2.4, +(h + 0.1).toFixed(2)))} className="p-1.5 rounded-full hover:bg-white/10 text-[10px] cursor-pointer" title="فاصله سطر بیشتر">+ل</button>
         <span className="w-px h-4 bg-white/20 mx-1" />
         {(["narrow", "medium", "wide"] as Width[]).map(w => (
-          <button key={w} onClick={() => setWidth(w)} className={`px-2 py-1 rounded text-[10px] ${width === w ? "bg-white/20" : "opacity-60"}`}>{w === "narrow" ? "باریک" : w === "medium" ? "متوسط" : "پهن"}</button>
+          <button key={w} onClick={() => setWidth(w)} className={`px-2 py-1 rounded text-[10px] cursor-pointer ${width === w ? "bg-white/20" : "opacity-60"}`}>{w === "narrow" ? "باریک" : w === "medium" ? "متوسط" : "پهن"}</button>
         ))}
         <span className="w-px h-4 bg-white/20 mx-1" />
-        <button onClick={() => setAlign(a => a === "justify" ? "right" : "justify")} className="p-1.5 rounded-full hover:bg-white/10" title="ترازبندی">
+        <button onClick={() => setAlign(a => a === "justify" ? "right" : "justify")} aria-label="ترازبندی متن" className="p-1.5 rounded-full hover:bg-white/10 cursor-pointer" title="ترازبندی">
           {align === "justify" ? <AlignJustify className="w-3.5 h-3.5" /> : <AlignLeft className="w-3.5 h-3.5" />}
         </button>
         <span className="w-px h-4 bg-white/20 mx-1" />
-        <button onClick={speak} className={`p-1.5 rounded-full ${speaking ? "bg-emerald-500" : "hover:bg-white/10"}`} title="پخش صوتی">
+        <button onClick={speak} aria-label="پخش صوتی" className={`p-1.5 rounded-full cursor-pointer ${speaking ? "bg-[var(--brand-600)]" : "hover:bg-white/10"}`} title="پخش صوتی">
           {speaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
         </button>
         {onToggleStar && (
-          <button onClick={() => onToggleStar(article.id)} className={`p-1.5 rounded-full hover:bg-white/10 ${article.starred ? "text-amber-400" : ""}`} title="نشان">
+          <button onClick={() => onToggleStar(article.id)} aria-label="نشان‌گذاری" className={`p-1.5 rounded-full hover:bg-white/10 cursor-pointer ${article.starred ? "text-amber-400" : ""}`} title="نشان">
             <Star className="w-3.5 h-3.5" fill={article.starred ? "currentColor" : "none"} />
           </button>
         )}
         {onToggleSave && (
-          <button onClick={() => onToggleSave(article.id)} className={`p-1.5 rounded-full hover:bg-white/10 ${isSaved ? "text-emerald-400" : ""}`} title="ذخیره">
+          <button onClick={() => onToggleSave(article.id)} aria-label="ذخیره مقاله" className={`p-1.5 rounded-full hover:bg-white/10 cursor-pointer ${isSaved ? "text-emerald-400" : ""}`} title="ذخیره">
             <Bookmark className="w-3.5 h-3.5" fill={isSaved ? "currentColor" : "none"} />
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

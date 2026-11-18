@@ -1,4 +1,4 @@
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* ════════════════════════════════════════════════════════════════════
    STRIDER EDITORIAL SYSTEM — applied to KIAN/flow
@@ -503,12 +503,46 @@
   .text-mono        { font-family: var(--font-mono); }
 
   .ring-focus       { box-shadow: var(--shadow-focus); }
-  .glass            { backdrop-filter: blur(12px) saturate(160%); background: oklch(from var(--background) l c h / 0.78); }
+  .glass            { backdrop-filter: blur(14px) saturate(165%); background: oklch(from var(--background) l c h / 0.82); }
   .grain::before    { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.03; mix-blend-mode: overlay;
                       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"); }
 
   .anim-in          { animation: anim-in var(--duration-normal) var(--ease-out-expo) both; }
   .anim-up          { animation: anim-up var(--duration-normal) var(--ease-out-expo) both; }
+
+  /* Showreel cursor-tracking radial spotlight surface (compositor opacity only) */
+  .editorial-spotlight {
+    position: relative;
+    isolation: isolate;
+  }
+  .editorial-spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms var(--ease-out-expo);
+    background: radial-gradient(
+      340px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+      oklch(from var(--brand-400) l c h / 0.11),
+      transparent 70%
+    );
+  }
+  .editorial-spotlight:hover::after {
+    opacity: 1;
+  }
+
+  .headline-balance {
+    text-wrap: balance;
+  }
+
+  .tactile-btn {
+    transition: transform 140ms var(--ease-out-expo), background-color 140ms var(--ease-out-expo), color 140ms var(--ease-out-expo), border-color 140ms var(--ease-out-expo), opacity 140ms var(--ease-out-expo);
+  }
+  .tactile-btn:active {
+    transform: scale(0.96);
+  }
 }
 
 @keyframes anim-in { from { opacity: 0; } to { opacity: 1; } }

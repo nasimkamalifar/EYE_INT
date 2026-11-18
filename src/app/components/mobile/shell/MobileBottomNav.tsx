@@ -1,6 +1,8 @@
 import { Home, Search, Bookmark, Globe2, User } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
+import { motion } from "motion/react";
 import { useHaptics } from "../hooks";
+import { SPRING_SNAPPY, SPRING_TACTILE } from "../../../motionChoreography";
 
 export type MobileTab = "home" | "international" | "discover" | "saved" | "me";
 
@@ -12,8 +14,6 @@ type TabDef = {
   center?: boolean;
 };
 
-/* Layout per ui-styles.css spec: home / notifications / [FAB] / stats / account.
-   Adapted to app domain: home / international / [discover-FAB] / saved / me. */
 const TABS: TabDef[] = [
   { id: "home",          label: "خانه",      Icon: Home },
   { id: "international", label: "بین‌الملل", Icon: Globe2 },
@@ -23,14 +23,15 @@ const TABS: TabDef[] = [
 ];
 
 export function MobileBottomNav({
-  active, onChange, badges,
+  active,
+  onChange,
+  badges,
 }: {
   active: MobileTab;
   onChange: (t: MobileTab) => void;
   badges?: Partial<Record<MobileTab, number>>;
 }) {
   const haptic = useHaptics();
-  const sides = TABS.filter((t) => !t.center);
   const center = TABS.find((t) => t.center)!;
 
   const press = (id: MobileTab) => {
@@ -38,13 +39,11 @@ export function MobileBottomNav({
     onChange(id);
   };
 
-  /* Bar geometry (matches spec 375×65 ratio, scales with viewport).
-     Notch is a downward concave arc cut into the top edge of the bar. */
   const W = 375;
-  const H = 65;
-  const BAR_TOP = 9;
+  const H = 64;
+  const BAR_TOP = 8;
   const CX = W / 2;
-  const NOTCH_R = 34; // half of 68px notch — slightly tighter than the 76 ellipse so FAB has breathing room
+  const NOTCH_R = 34;
 
   const barPath =
     `M 0 ${BAR_TOP} ` +
@@ -61,74 +60,80 @@ export function MobileBottomNav({
       aria-label="پیمایش پایین"
     >
       <div className="relative w-full" style={{ height: `${H}px` }}>
-        {/* Bar shape (white surface with concave notch on top) */}
         <svg
           className="absolute inset-0 w-full h-full kian-bottomnav-svg"
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
-          aria-hidden
+          aria-hidden="true"
         >
           <path d={barPath} fill="var(--card)" />
         </svg>
 
-        {/* Side icons (2 left + 2 right) */}
         <ul className="absolute left-0 right-0 grid grid-cols-5 h-full">
           {TABS.map((t) => {
-            if (t.center) return <li key={t.id} aria-hidden />; // reserve center slot for FAB
+            if (t.center) return <li key={t.id} aria-hidden="true" />;
             const on = active === t.id;
             const b = badges?.[t.id];
             return (
-              <li key={t.id} className="flex items-end justify-center pb-2.5">
-                <button
+              <li key={t.id} className="flex items-end justify-center pb-1.5">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.88 }}
+                  transition={SPRING_TACTILE}
                   onClick={() => press(t.id)}
                   aria-current={on ? "page" : undefined}
                   aria-label={t.label}
-                  className="relative size-9 grid place-items-center tap press rounded-full"
+                  className="relative min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-0.5 tap rounded-full"
                 >
                   <t.Icon
-                    className={on
-                      ? "size-6 text-[var(--foreground)]"
-                      : "size-6 text-[var(--foreground-subtle)]"}
-                    strokeWidth={on ? 2.2 : 1.7}
+                    className={
+                      on
+                        ? "size-[21px] text-[var(--foreground)] transition-colors"
+                        : "size-[21px] text-[var(--foreground-subtle)] transition-colors"
+                    }
+                    strokeWidth={on ? 2.2 : 1.75}
                   />
+                  <span
+                    className={`text-[10px] leading-none ${
+                      on ? "font-semibold text-[var(--foreground)]" : "font-medium text-[var(--foreground-subtle)]"
+                    }`}
+                  >
+                    {t.label}
+                  </span>
                   {!!b && (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full
-                                 bg-[var(--brand-500)] text-white text-[9px] grid place-items-center font-bold tabular-nums"
-                    >
+                    <span className="absolute top-0.5 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-[var(--brand-500)] text-white text-[9px] grid place-items-center font-bold tabular-nums">
                       {b > 99 ? "+۹۹" : b.toLocaleString("fa-IR")}
                     </span>
                   )}
                   {on && (
-                    <span
-                      aria-hidden
-                      className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-[var(--foreground)]"
+                    <motion.span
+                      layoutId="mobile-bottomnav-active-dot"
+                      transition={SPRING_SNAPPY}
+                      aria-hidden="true"
+                      className="absolute -bottom-0.5 w-4 h-[2.5px] rounded-full bg-[var(--brand-500)]"
                     />
                   )}
-                </button>
+                </motion.button>
               </li>
             );
           })}
         </ul>
 
-        {/* Raised center FAB */}
-        <button
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          transition={SPRING_TACTILE}
           onClick={() => press(center.id)}
           aria-current={active === center.id ? "page" : undefined}
           aria-label={center.label}
-          className="absolute left-1/2 -translate-x-1/2 -top-1 size-[52px] rounded-full grid place-items-center bg-[var(--foreground)] text-[var(--card)] tap press kian-bottomnav-fab mx-[0px] my-[-15px]"
+          className={`absolute left-1/2 -translate-x-1/2 -top-3.5 size-[52px] rounded-full grid place-items-center tap kian-bottomnav-fab ${
+            active === center.id
+              ? "bg-[var(--brand-500)] text-white"
+              : "bg-[var(--foreground)] text-[var(--card)]"
+          }`}
         >
-          <center.Icon className="size-6" strokeWidth={2.4} />
-          {active === center.id && (
-            <span
-              aria-hidden
-              className="absolute -bottom-2.5 w-1 h-1 rounded-full bg-[var(--foreground)]"
-            />
-          )}
-        </button>
-
-        {/* Sentinel for sides count to satisfy lint (unused otherwise) */}
-        <span hidden aria-hidden>{sides.length}</span>
+          <center.Icon className="size-5" strokeWidth={2.3} />
+        </motion.button>
       </div>
     </nav>
   );

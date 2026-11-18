@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { Flame } from "lucide-react";
+import { motion } from "motion/react";
 import { ImageWithFallback } from "../../figma/ImageWithFallback";
 import { timeAgoFa } from "../utils/fa";
 import type { Article } from "../../../data";
+import { SPRING_TACTILE, EASE_EDITORIAL, computeStaggerDelay } from "../../../motionChoreography";
 
 type Props = {
   articles: Article[];
@@ -12,81 +13,69 @@ type Props = {
 };
 
 /**
- * Instagram-style "NEWS Stories" ribbon — full-bleed snap cards with hero image,
- * dark gradient, source pill, and large headline. Sits above the segmented control.
+ * Editorial Feature Stories Carousel — horizontal snap cards with measured
+ * contrast scrim, unboxed source kicker, and tactile spring feedback.
  */
-export function NewsStoriesRibbon({ articles, onOpen, limit = 10 }: Props) {
+export function NewsStoriesRibbon({ articles, onOpen, limit = 8 }: Props) {
   const stories = useMemo(() => {
-    return articles
-      .filter((a) => a.image)
-      .slice(0, limit);
+    return articles.filter((a) => a.image).slice(0, limit);
   }, [articles, limit]);
 
   if (stories.length === 0) return null;
 
   return (
-    <section className="mt-2" dir="rtl">
-      <header className="px-4 mb-2 flex items-center gap-1.5">
-        <Flame className="size-4 text-rose-500" />
-        <h3 className="text-[13px] font-bold">داستان‌های امروز</h3>
-        <span className="text-[11px] text-[var(--foreground-subtle)]">· به‌روزرسانی زنده</span>
+    <section className="mt-1.5 mb-1" dir="rtl" aria-label="گزیده داستان‌های امروز">
+      <header className="px-4 mb-2 flex items-baseline justify-between">
+        <h3 className="font-display text-[15px] font-semibold text-[var(--foreground)]">
+          گزیدهٔ امروز
+        </h3>
+        <span className="text-[11px] text-[var(--foreground-subtle)] tabular-nums">
+          {stories.length.toLocaleString("fa-IR")} گزارش تصویری
+        </span>
       </header>
 
       <div className="overflow-x-auto scrollbar-none snap-x snap-mandatory">
         <ul className="flex gap-3 px-4 pb-2">
           {stories.map((a, i) => (
-            <li
+            <motion.li
               key={a.id}
-              className="snap-start shrink-0 stagger-child"
-              style={{ ["--i" as any]: i }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.22,
+                delay: computeStaggerDelay(i, 24, 160),
+                ease: EASE_EDITORIAL,
+              }}
+              className="snap-start shrink-0"
             >
-              <button
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING_TACTILE}
                 onClick={() => onOpen(a)}
-                className="relative w-[260px] h-[340px] rounded-[22px] overflow-hidden tap press text-right shadow-[var(--shadow-md)]"
+                className="group relative w-[248px] h-[304px] rounded-[20px] overflow-hidden tap text-right shadow-[var(--shadow-md)] border border-black/5 dark:border-white/10"
               >
                 <ImageWithFallback
                   src={a.image!}
                   alt={a.title}
-                  className="absolute inset-0 size-full object-cover"
+                  className="absolute inset-0 size-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
                 />
-                {/* gradient overlay */}
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.78) 100%)",
-                  }}
-                />
-                {/* progress bar (decorative) */}
-                <div className="absolute top-2.5 inset-x-2.5 h-[3px] flex gap-1">
-                  {Array.from({ length: 3 }).map((_, k) => (
-                    <span
-                      key={k}
-                      className={`flex-1 rounded-full ${
-                        k === 0 ? "bg-white/95" : "bg-white/30"
-                      }`}
-                    />
-                  ))}
-                </div>
+                {/* Measured WCAG contrast scrim */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
 
-                {/* source pill */}
-                <div className="absolute top-5 right-3 flex items-center gap-1.5 bg-black/45 backdrop-blur-sm px-2 py-1 rounded-full text-white text-[10.5px]">
-                  <span>{a.sourceIcon}</span>
-                  <span className="font-semibold">{a.source}</span>
-                </div>
-
-                {/* copy */}
-                <div className="absolute inset-x-0 bottom-0 p-3.5 text-white">
-                  <div className="text-[11px] opacity-85 mb-1.5">
-                    {timeAgoFa(a.publishedAt)}
-                    {a.category ? ` · ${a.category}` : ""}
+                <div className="absolute inset-x-0 bottom-0 p-4 text-white flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-white/80 tabular-nums">
+                    <span>{a.sourceIcon}</span>
+                    <span className="font-medium truncate max-w-[120px]">{a.source}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{a.publishedAt ? timeAgoFa(a.publishedAt) : a.date}</span>
                   </div>
-                  <div className="text-[14.5px] font-bold leading-tight line-clamp-3 drop-shadow-[0_1px_8px_rgba(0,0,0,0.4)]">
+                  <div className="font-display text-[15.5px] font-semibold leading-[1.45] line-clamp-3 headline-balance">
                     {a.title}
                   </div>
                 </div>
-              </button>
-            </li>
+              </motion.button>
+            </motion.li>
           ))}
         </ul>
       </div>

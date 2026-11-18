@@ -17,7 +17,7 @@ type Props = {
  */
 export function MobileScreen({ topbar, footer, fab, children, withBottomNav = true }: Props) {
   return (
-    <div className="flex flex-col h-dscreen min-w-0 min-h-0 bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex flex-col h-full flex-1 min-w-0 min-h-0 bg-[var(--background)] text-[var(--foreground)]">
       {topbar}
       <main
         className="flex-1 min-h-0 relative"
